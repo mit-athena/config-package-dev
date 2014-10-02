@@ -12,10 +12,11 @@
 #   Undoes the action of displace_link <prefix> <suffix> specified
 #   above.
 #
-# Version: 4.0
+# Version: 5.2
 #
 # Copyright © 2008–2012 Tim Abbott <tabbott@mit.edu> and Anders
 # Kaseorg <andersk@mit.edu>
+# Copyright © 2014 Massachusetts Institute of Technology
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -42,6 +43,15 @@ package=#PACKAGE#
 
 ours=#DEB_DISPLACE_EXTENSION#
 theirs=#DEB_DISPLACE_EXTENSION#-orig
+
+cachedir="/var/cache/config-package-dev"
+
+cpd_debug()
+{
+    if [ -e "/var/lib/config-package-dev/.debug" ]; then
+        echo "D: $@" >&2
+    fi
+}
 
 displace_link_divert()
 {
@@ -156,4 +166,109 @@ check_undisplace_unhide()
     fi
 }
 
+# The following is taken directly from decode() in config-package.pm.
+# Dear future maintainers: we have taken pity on you and put the code
+# in this block in an effort to make it readable.  "You're welcome."
+perl_unparse='
+sub unparse {
+  $_ = $_[0];
+  return "/" unless $_;
+  return "_" if $_ eq "-";
+  return uc($_) if /^[a-z]$/;
+  s/^x//;
+  return chr hex $_;
+}
+'
+
+save_diverted_list()
+{
+    # "You're welcome, again."
+    perl_code='
+s/\s+//g;
+print join(" ",
+           map {
+             if (/^diverts/) {
+               s|^diverts-|/|;
+               s/\+([^+]*)\+/unparse($1)/eg;
+               $_
+              }
+           } split(",", $_)
+          );
+'
+    filename="$1"
+    mkdir -p "$cachedir"
+    rm -f "$cachedir/$filename" && touch "$cachedir/$filename"
+    # Get the list of what the currently installed version of the
+    # package diverts, from its Conflicts.  We can't simply use
+    # dpkg-divert --list, because we can't guarantee that all
+    # diversions by our package were created by c-p-d
+    diverted_files=$(dpkg-query -W -f '${Conflicts}' "$package" | perl -ne "$perl_unparse $perl_code")
+    for f in $diverted_files; do
+        cpd_debug "save_diverted_list: Decoded file path $f"
+        if LC_ALL=C dpkg-divert --list "$package" | \
+            grep -qx "diversion of $f to .* by $package"; then
+            cpd_debug "save_diverted_list: Saving $f -> $cachedir/$filename"
+            echo $f >> "$cachedir/$filename"
+        else
+	    echo "*** OMINOUS WARNING ***: $f was listed as diverted in Conflicts, but does not appear in dpkg-divert output!" >&2
+        fi
+    done
+}
+
+cleanup_diversion() {
+    filename="$1"
+    # The filename, obtained from diverted-files, tells us what was
+    # diverted, but not what it was diverted _to_, so we have no idea
+    # if it has a suffix (e.g. .1.gz) or not.  Go go gadget awk.
+    diversion=$(LC_ALL=C dpkg-divert --list "$package" | awk -v file="$filename" -v pkg="$package" '(NF == 7) && ($1$2$3$4$6$7 == "diversionof"file"toby"pkg) { print $5 }')
+    cpd_debug "cleanup_diversion: $filename was diverted to $diversion"
+    if [ -z "$diversion" ]; then
+	echo "*** OMINOUS WARNING ***: Was asked to cleanup a diversion which appears to have vanished!" >&2
+    elif ! echo "$diversion" | grep -Fq "$theirs"; then
+        # Maybe this was a hide(), let's see...
+        perl_decode='s/\+([^+]*)\+/unparse($1)/eg;'
+        if [ "$(echo "$diversion" | perl -pe "$perl_unparse $perl_decode")" = "/usr/share/${package}${filename}" ]; then
+            cpd_debug "cleanup_diversion: will un-hide $filename"
+            echo "Cleaning up old diversion of $filename" >&2
+            undisplace_unhide $filename
+        else
+	    echo "*** OMINOUS WARNING ***: Was asked to cleanup a diversion that doesn't include '$theirs' suffix!" >&2
+        fi
+    else
+        # OK, now we calculate the suffix
+        prefix_suffix="$(echo "$diversion" | sed -e "s/\(.*\)$theirs/\1 /g")"
+        cpd_debug "cleanup_diversion: '$diversion' becomes '$prefix_suffix'"
+        echo "Cleaning up old diversion of $filename" >&2
+        undisplace_unlink $prefix_suffix
+    fi
+}
+
+cleanup_old_diversions() {
+    # No point running this if this is the first install
+    if [ "$1" != "configure" ] || [ -z "$2" ]; then
+        return 0
+    fi
+    # Save the list of what we're diverting now
+    save_diverted_list "${package}.diversions-new"
+    if [ -f "$cachedir/${package}.diversions-old" ]; then
+        cpd_debug "cleanup_old_diversions: List of old diversions exists"
+        for f in $(cat "$cachedir/${package}.diversions-old"); do
+            cpd_debug "cleanup_old_diversions: Considering $f"
+            # If we used to divert something and we now don't, punt it
+            if ! grep -xFq "$f" "$cachedir/${package}.diversions-new"; then
+                cleanup_diversion "$f"
+            fi
+        done
+    fi
+    rm -f "$cachedir/${package}.diversions-new"
+    rm -f "$cachedir/${package}.diversions-old"
+}
+
+save_old_diversions() {
+    if [ "$1" = "install" ] || [ "$1" = "upgrade" ]; then
+        if [ -n "$2" ]; then
+            save_diverted_list "${package}.diversions-old"
+        fi
+    fi
+}
 # End of divert.sh.in
