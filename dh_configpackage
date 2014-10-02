@@ -413,7 +413,7 @@ foreach my $package (@{$dh{DOPACKAGES}}) {
             my $prerm = escape_shell(join "\\n", (
                 'if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then',
                 (map {"    undisplace_unlink " . displace_files_replace_name($package, $_, " ")} reverse_if_6 (@displacefiles)),
-                (map {"    undisplace_unhide $_ $package"} reverse_if_6 (@hidefiles)),
+                (map {"    undisplace_unhide $_"} reverse_if_6 (@hidefiles)),
                 'fi'
             ));
             autoscript($package, "prerm", "displace.sh.in",
