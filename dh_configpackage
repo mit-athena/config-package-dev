@@ -140,7 +140,7 @@ file of the transformation has not changed from what you expected.
 
 I<Transformation sources>: Under normal operation, the source (passed
 on stdin) for the transformation is the name of the diversion without
-the divert extension.  In some cases, you may wish to use a different
+the displace extension.  In some cases, you may wish to use a different
 source (e.g. a sample configuration file in /usr/share/doc).  You can
 specify this source as an optional field between the diversion
 filename and the transformation.  This field must begin with a '<'
@@ -159,7 +159,9 @@ transformation in future versions of the package.
 This file is used to specify the displace extension for any files
 diverted by this package, if you do not want to accept the default of
 the first word in the package name.  It will not normally be present.
-(See L<"CAVEATS">.)
+If present, the contents of this file should be a dot and the name of
+the extension (e.g. ".myproject", ".displaced"). See the L<"CAVEATS">
+section for more information.
 
 =back
 
