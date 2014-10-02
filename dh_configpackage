@@ -2,6 +2,7 @@
 # Copyright © 2007-2008 Anders Kaseorg <andersk@mit.edu> and
 #                       Tim Abbott <tabbott@mit.edu>
 # Copyright © 2011-2012 Geoffrey Thomas <geofft@mit.edu>
+# Copyright © 2014 Massachusetts Institute of Technology
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
@@ -140,7 +141,7 @@ file of the transformation has not changed from what you expected.
 
 I<Transformation sources>: Under normal operation, the source (passed
 on stdin) for the transformation is the name of the diversion without
-the divert extension.  In some cases, you may wish to use a different
+the displace extension.  In some cases, you may wish to use a different
 source (e.g. a sample configuration file in /usr/share/doc).  You can
 specify this source as an optional field between the diversion
 filename and the transformation.  This field must begin with a '<'
@@ -159,7 +160,9 @@ transformation in future versions of the package.
 This file is used to specify the displace extension for any files
 diverted by this package, if you do not want to accept the default of
 the first word in the package name.  It will not normally be present.
-(See L<"CAVEATS">.)
+If present, the contents of this file should be a dot and the name of
+the extension (e.g. ".myproject", ".displaced"). See the L<"CAVEATS">
+section for more information.
 
 =back
 
@@ -397,8 +400,12 @@ foreach my $package (@{$dh{DOPACKAGES}}) {
 
     # Add code to postinst to add/remove diversions as appropriate
     if (! $dh{NOSCRIPTS}) {
+	my $postinst = escape_shell(join "\\n", (
+	    'cleanup_old_diversions "$@"',
+	    '', # We need an extra blank line
+	    ));
         if (@undisplacefiles || @unhidefiles || @displacefiles || @hidefiles) {
-            my $postinst = escape_shell(join "\\n", (
+            $postinst .= escape_shell(join "\\n", (
                 'if [ "$1" = "configure" ] || [ "$1" = "abort-remove" ]; then',
                 (map {"    check_undisplace_unlink " . displace_files_replace_name($package, $_, " ")} @undisplacefiles),
                 (map {"    check_undisplace_unhide $_ " . hide_files_name($_, $package)} @unhidefiles),
@@ -409,11 +416,17 @@ foreach my $package (@{$dh{DOPACKAGES}}) {
             autoscript($package, "postinst", "displace.sh.in",
                 "s/#PACKAGE#/$package/g; s/#DEB_DISPLACE_EXTENSION#/$extension/g; \\\$a\"$postinst\"");
         }
+	my $preinst = escape_shell(join "\\n", (
+	    'save_old_diversions "$@"',
+	    '',
+	    ));
+        autoscript($package, "preinst", "displace.sh.in",
+                "s/#PACKAGE#/$package/g; s/#DEB_DISPLACE_EXTENSION#/$extension/g; \\\$a\"$preinst\"");
         if (@displacefiles || @hidefiles) {
             my $prerm = escape_shell(join "\\n", (
                 'if [ "$1" = "remove" ] || [ "$1" = "deconfigure" ]; then',
                 (map {"    undisplace_unlink " . displace_files_replace_name($package, $_, " ")} reverse_if_6 (@displacefiles)),
-                (map {"    undisplace_unhide $_ $package"} reverse_if_6 (@hidefiles)),
+                (map {"    undisplace_unhide $_"} reverse_if_6 (@hidefiles)),
                 'fi'
             ));
             autoscript($package, "prerm", "displace.sh.in",

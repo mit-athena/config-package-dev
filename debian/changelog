@@ -1,3 +1,13 @@
+config-package-dev (5.2) UNRELEASED; urgency=low
+
+  * Team upload.
+  * Allow config-package-dev to automatically undivert/unremove files upon
+    upgrades (Trac: #867)
+  * Update dh_configpackage documentation with minor wordsmithing and to
+    clarify the correct use of the displace-extension file (Trac: #1306)
+
+ -- Jonathan Reed <jdreed@mit.edu>  Thu, 02 Oct 2014 09:08:16 -0400
+
 config-package-dev (5.1.2) unstable; urgency=low
 
   * Team upload.

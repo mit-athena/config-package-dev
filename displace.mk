@@ -32,7 +32,7 @@ include /usr/share/cdbs/1/rules/debhelper.mk
 
 CDBS_BUILD_DEPENDS := $(CDBS_BUILD_DEPENDS), config-package-dev (>= 5.0~)
 
-# displace.sh.in is included in the postinst/prerm scripts of packages
+# displace.sh.in is included in the maintainer scripts of packages
 # installing diversions and symlinks using config-package-dev.
 DEB_DISPLACE_SCRIPT = /usr/share/debhelper/autoscripts/displace.sh.in
 # script used to encode the path of a file uniquely in a valid virtual
@@ -86,6 +86,7 @@ $(patsubst %,debian-displace/%,$(DEB_DISPLACE_PACKAGES)) :: debian-displace/%:
 	set -e; \
 	{ \
 	    sed 's/#PACKAGE#/$(cdbs_curpkg)/g; s/#DEB_DISPLACE_EXTENSION#/$(DEB_DISPLACE_EXTENSION)/g' $(DEB_DISPLACE_SCRIPT); \
+	    echo 'cleanup_old_diversions "$$@"'; \
 	    $(if $(displace_files_all), \
 		echo 'if [ "$$1" = "configure" ]; then'; \
 		$(foreach file,$(displace_undisplace_files), \
@@ -100,6 +101,13 @@ $(patsubst %,debian-displace/%,$(DEB_DISPLACE_PACKAGES)) :: debian-displace/%:
 		echo 'fi'; \
 	    ) \
 	} >> $(CURDIR)/debian/$(cdbs_curpkg).postinst.debhelper
+# Add code to preinst script to calculate the list of diverted files
+# from the previous version (if any) of the package
+	set -e; \
+	{ \
+	    sed 's/#PACKAGE#/$(cdbs_curpkg)/g; s/#DEB_DISPLACE_EXTENSION#/$(DEB_DISPLACE_EXTENSION)/g' $(DEB_DISPLACE_SCRIPT); \
+	    echo 'save_old_diversions "$$@"'; \
+	} >> $(CURDIR)/debian/$(cdbs_curpkg).preinst.debhelper
 # Add code to prerm script to undo diversions and symlinks when package is removed.
 	set -e; \
 	{ \

@@ -3,4 +3,4 @@
 # Works around <http://bugs.debian.org/460336>.
 TMPDIR=mktemp -d
 export ELINKS_CONFDIR=$TMPDIR
-exec elinks.debathena-orig "$@"x
+exec elinks.debathena-orig "$@"
